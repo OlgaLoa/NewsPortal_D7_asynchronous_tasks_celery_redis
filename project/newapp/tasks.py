@@ -1,21 +1,24 @@
 # импортируем декоратор из библиотеки
-from datetime import timezone
+import datetime
 
 from celery import shared_task
+
 from django.contrib.auth.models import User
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
-from .models import Post
+from .models import Post, Subscription
 from django.conf import settings
+
+from datetime import timezone
 
 
 @shared_task #рассылка уведомлений на email подписчиков при создании новости подписанной категории
-def send_email_task(pk):
-    post = Post.objects.get(pk=pk)#определяем созданную новость по pk
+def send_email_task(pk): #pk надо будет передавать при вызове таски
+    post = Post.objects.get(pk=pk)#определяем созданную новость по переданному pk
     subscribers_emails = User.objects.filter(subscriptions__category__in=post.postCategory.all()).values_list('email', flat=True)
 
-    subject = f'Another news has appeared which is concerned with {",".join(category.name for category in post.postCategory.all())} category' #list comprehension («генератора списка»)
+    subject = f'Another news has appeared which is concerned with {",".join(category.name for category in post.postCategory.all())}category' #list comprehension («генератора списка»)
 
     text_content = (
             f'Title: {post.title}\n'
@@ -36,7 +39,7 @@ def send_email_task(pk):
 
 @shared_task #рассылка уведомлений на email подписчиков о созданных за последние 7 дней новостях подписанной категории
 def weekly_send_email_task():
-    today = timezone.now() #определяем текущее время (в таблице время с часовым поясом. ошибка "наивное время")
+    today = datetime.datetime.now() #определяем текущее время (в таблице время с часовым поясом. ошибка "наивное время")
     last_week = today - datetime.timedelta(days=7)#первоначальная точка отсчета для рассылки появившихся новостей
     posts = Post.objects.filter(dateCreation__gte=last_week)#фильтруем созданные новости за период позднее (>=) чем 7 дней назад. dateCreation из Post
 

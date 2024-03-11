@@ -1,11 +1,3 @@
-# Импортируем класс, который говорит нам о том,
-# что в этом представлении мы будем выводить список объектов из БД
-
-#ListView:запрашивает данные из базы по указанной модели, находит указанный шаблон,
-#передаёт объекты в шаблон. При этом у него есть методы, которые мы можем переопределить.
-#Одним из таких методов является get_context_data, позволяет нам получить дополнительные данные,
-#которые будут переданы в шаблон.
-
 from datetime import datetime
 
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
@@ -20,6 +12,8 @@ from django.db.models import Exists, OuterRef
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_protect
 from .models import Subscription, Category
+
+from .tasks import send_email_task, weekly_send_email_task
 
 
 class NewsList(ListView):
@@ -99,7 +93,11 @@ class NewsCreate(PermissionRequiredMixin,CreateView):# Добавляем нов
         post = form.save(commit=False)
         if self.request.path == '/news/news/create/': # в модели Post categoryType по default = Article
             post.categoryType = 'NW' #если вызывается этот путь - сохраняется как NW
-        post.save() #сохраняем форму
+        post.save() #сохраняем форму( создали пост, кот присвоился id)
+        # вызываем таску (уведомление на email о появлении новой новости подписанной категории)
+        send_email_task.delay(post.pk) #получаем pk созданного поста и передаем его в таску (тк это обяз-ый аргумент для таски)
+        # вызываем таску (уведомление на email о появлении новых новостей за неделю подписанной категории)
+        weekly_send_email_task.delay()
         return super().form_valid(form)
 
 class NewsUpdate(PermissionRequiredMixin, UpdateView):# Добавляем новое представление для создания новости.
